@@ -8,7 +8,6 @@ this is the default CodeBox.
 import asyncio
 import json
 import os
-import shutil
 import signal
 import subprocess
 import sys
@@ -65,9 +64,8 @@ class LocalBox(BaseBox):
 
     def start(self) -> CodeBoxStatus:
         self.session_id = uuid4()
-        self.directory_path = f".codebox/{str(self.session_id)}"
-        os.makedirs(self.directory_path, exist_ok=True)
-        print(f"made directory {self.directory_path}")
+        os.makedirs(".codebox", exist_ok=True)
+        self._check_port()
         if settings.VERBOSE:
             print("Starting kernel...")
             out = None
@@ -87,7 +85,7 @@ class LocalBox(BaseBox):
                 ],
                 stdout=out,
                 stderr=out,
-                cwd=self.directory_path,
+                cwd=".codebox",
             )
             self._jupyter_pids.append(self.jupyter.pid)
         except FileNotFoundError:
@@ -168,9 +166,7 @@ class LocalBox(BaseBox):
 
     async def astart(self) -> CodeBoxStatus:
         self.session_id = uuid4()
-        self.directory_path = f".codebox/{str(self.session_id)}"
-        os.makedirs(self.directory_path, exist_ok=True)
-        print(f"made directory {self.directory_path}")
+        os.makedirs(".codebox", exist_ok=True)
         self.aiohttp_session = aiohttp.ClientSession()
         await self._acheck_port()
         if settings.VERBOSE:
@@ -190,7 +186,7 @@ class LocalBox(BaseBox):
                 f"--KernelGatewayApp.port={self.port}",
                 stdout=out,
                 stderr=out,
-                cwd=self.directory_path,
+                cwd=".codebox",
             )
             self._jupyter_pids.append(self.jupyter.pid)
         except Exception as e:
@@ -521,10 +517,8 @@ class LocalBox(BaseBox):
                 return CodeBoxOutput(type="error", content=error)
 
     def upload(self, file_name: str, content: bytes) -> CodeBoxStatus:
-        if not hasattr(self, 'directory_path'):
-            print("Directory path not found. Make sure to start the codebox session first.")
-
-        with open(os.path.join(self.directory_path, file_name), "wb") as f:
+        os.makedirs(".codebox", exist_ok=True)
+        with open(os.path.join(".codebox", file_name), "wb") as f:
             f.write(content)
 
         return CodeBoxStatus(status=f"{file_name} uploaded successfully")
@@ -533,7 +527,7 @@ class LocalBox(BaseBox):
         return await asyncio.to_thread(self.upload, file_name, content)
 
     def download(self, file_name: str) -> CodeBoxFile:
-        with open(os.path.join(self.directory_path, file_name), "rb") as f:
+        with open(os.path.join(".codebox", file_name), "rb") as f:
             content = f.read()
 
         return CodeBoxFile(name=file_name, content=content)
@@ -556,7 +550,7 @@ class LocalBox(BaseBox):
     def list_files(self) -> List[CodeBoxFile]:
         return [
             CodeBoxFile(name=file_name, content=None)
-            for file_name in os.listdir(self.directory_path)
+            for file_name in os.listdir(".codebox")
         ]
 
     async def alist_files(self) -> List[CodeBoxFile]:
@@ -574,9 +568,6 @@ class LocalBox(BaseBox):
 
     def stop(self) -> CodeBoxStatus:
         try:
-            print(f"deleting directory {self.directory_path}")
-            shutil.rmtree(self.directory_path)  # Delete the session directory and all its contents
-
             if self.jupyter is not None:
                 if isinstance(self.jupyter, subprocess.Popen):
                     self.jupyter.terminate()
@@ -607,8 +598,6 @@ class LocalBox(BaseBox):
         return CodeBoxStatus(status="stopped")
 
     async def astop(self) -> CodeBoxStatus:
-        print(f"deleting directory {self.directory_path}")
-        shutil.rmtree(self.directory_path)  # Delete the session directory and all its contents
         if self.jupyter is not None:
             self.jupyter.terminate()
             await asyncio.create_subprocess_exec("kill", "-9", str(self.jupyter.pid))

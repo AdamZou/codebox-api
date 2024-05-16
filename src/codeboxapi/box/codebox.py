@@ -52,7 +52,6 @@ class CodeBox(BaseBox):
     """
 
     def __new__(cls, *args, **kwargs):
-        print("Using Adam's customized codebox.")
         if (
             kwargs.pop("local", False)
             or settings.CODEBOX_API_KEY is None
