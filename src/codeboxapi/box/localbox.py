@@ -8,6 +8,7 @@ this is the default CodeBox.
 import asyncio
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -65,12 +66,10 @@ class LocalBox(BaseBox):
     def start(self) -> CodeBoxStatus:
         self.session_id = uuid4()
         os.makedirs(".codebox", exist_ok=True)
-        self._check_port()
+
         if settings.VERBOSE:
             print("Starting kernel...")
-            out = None
-        else:
-            out = subprocess.PIPE
+
         self._check_installed()
         try:
             python = Path(sys.executable).absolute()
@@ -83,16 +82,33 @@ class LocalBox(BaseBox):
                     "--KernelGatewayApp.ip='0.0.0.0'",
                     f"--KernelGatewayApp.port={self.port}",
                 ],
-                stdout=out,
-                stderr=out,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 cwd=".codebox",
             )
             self._jupyter_pids.append(self.jupyter.pid)
+
+            # Check the output for the actual port used
+            trial_limit = 100
+            trials = 0
+            while trials < trial_limit:
+                line = self.jupyter.stdout.readline()
+                if not line:
+                    break
+                line = line.decode('utf-8')  # Decode the byte string
+                match = re.search(r"is available at http://0.0.0.0:(\d+)", line)
+                if match:
+                    self.port = int(match.group(1))  # Update the port
+                    print(f"Found Jupyter Kernel Gateway running on port: {self.port}")
+                    break
+                trials += 1
+
+            if trials == trial_limit and not match:
+                raise Exception("Failed to detect the Jupyter Kernel Gateway port within the trial limit.")
+            
         except FileNotFoundError:
             raise ModuleNotFoundError(
-                "Jupyter Kernel Gateway not found, please install it with:\n"
-                "`pip install jupyter_kernel_gateway`\n"
-                "to use the LocalBox."
+                "Failed to create jupyter kernel."
             )
         while True:
             try:
@@ -143,16 +159,6 @@ class LocalBox(BaseBox):
         if not self.ws:
             raise Exception("Could not connect to WebSocket after multiple attempts")
 
-    def _check_port(self) -> None:
-        try:
-            response = requests.get(f"http://localhost:{self.port}", timeout=270)
-        except requests.exceptions.ConnectionError:
-            pass
-        else:
-            if response.status_code == 200:
-                self.port += 1
-                self._check_port()
-
     def _check_installed(self) -> None:
         try:
             distribution("jupyter-kernel-gateway")
@@ -168,12 +174,10 @@ class LocalBox(BaseBox):
         self.session_id = uuid4()
         os.makedirs(".codebox", exist_ok=True)
         self.aiohttp_session = aiohttp.ClientSession()
-        await self._acheck_port()
+
         if settings.VERBOSE:
-            print("Starting kernel...")
-            out = None
-        else:
-            out = asyncio.subprocess.PIPE
+            print("Astarting kernel...")
+
         self._check_installed()
         python = Path(sys.executable).absolute()
         try:
@@ -184,17 +188,34 @@ class LocalBox(BaseBox):
                 "kernelgateway",
                 "--KernelGatewayApp.ip='0.0.0.0'",
                 f"--KernelGatewayApp.port={self.port}",
-                stdout=out,
-                stderr=out,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 cwd=".codebox",
             )
             self._jupyter_pids.append(self.jupyter.pid)
+
+            # Check the output for the actual port used
+            trial_limit = 100
+            trials = 0
+            while trials < trial_limit:
+                line = await self.jupyter.stdout.readline()
+                if not line:
+                    break
+                line = line.decode('utf-8')  # Decode the byte string
+                match = re.search(r"is available at http://0.0.0.0:(\d+)", line)
+                if match:
+                    self.port = int(match.group(1))  # Update the port
+                    print(f"Found Jupyter Kernel Gateway running on port: {self.port}")
+                    break
+                trials += 1
+
+            if trials == trial_limit and not match:
+                raise Exception("Failed to detect the Jupyter Kernel Gateway port within the trial limit.")
+
         except Exception as e:
             print(e)
             raise ModuleNotFoundError(
-                "Jupyter Kernel Gateway not found, please install it with:\n"
-                "`pip install jupyter_kernel_gateway`\n"
-                "to use the LocalBox."
+                "Failed to create jupyter kernel."
             )
         while True:
             try:
@@ -252,20 +273,6 @@ class LocalBox(BaseBox):
 
         if not self.ws:
             raise Exception("Could not connect to WebSocket after multiple attempts")
-
-    async def _acheck_port(self) -> None:
-        try:
-            if self.aiohttp_session is None:
-                self.aiohttp_session = aiohttp.ClientSession()
-            response = await self.aiohttp_session.get(f"http://localhost:{self.port}")
-        except aiohttp.ClientConnectorError:
-            pass
-        except aiohttp.ServerDisconnectedError:
-            pass
-        else:
-            if response.status == 200:
-                self.port += 1
-                await self._acheck_port()
 
     def status(self) -> CodeBoxStatus:
         if not self.kernel_id:
