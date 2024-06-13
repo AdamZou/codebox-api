@@ -14,6 +14,38 @@ from codeboxapi.config import settings
 from codeboxapi.errors import CodeBoxError
 
 
+import traceback
+import pandas as pd
+import numpy as np
+
+from codeboxapi.schema import CodeBoxFile
+
+
+def mse_prediction(content: str, files: list[CodeBoxFile]) -> float:
+    """
+    Reward function that calculates the reward based on the Mean Squared Error (MSE) between the predictions
+    and ground truths stored in separate CSV files.
+
+    Parameters:
+        content (str): The content of the response.
+        files (list[File]): List of files attached to the response.
+
+    Returns:
+        float: The reward value based on the MSE.
+    """
+    try:
+        for file in files:
+            if file.name == 'prediction.csv':
+                predictions = file.to_dataframe().iloc[:,0] # Assume the prediction df is with one column.
+                ground_truths = pd.read_csv('examples/assets/test_data.csv')['Sales']
+                mse = np.mean((predictions - ground_truths) ** 2)
+                return mse
+    except Exception:
+        traceback.print_exc()
+    
+    return float('inf')
+
+
 def build_request_data(
     method: str,
     endpoint: str,

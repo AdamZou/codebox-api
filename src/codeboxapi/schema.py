@@ -6,6 +6,8 @@ interface for interacting with the API.
 """
 
 from typing import Optional
+import pandas as pd
+from io import StringIO
 
 from pydantic import BaseModel
 
@@ -60,6 +62,12 @@ class CodeBoxFile(BaseModel):
         with open(path, "rb") as f:
             path = path.split("/")[-1]
             return cls(name=path, content=f.read())
+        
+    def to_dataframe(self) -> pd.DataFrame:
+        data_string = self.content.decode('utf-8')
+        data_io = StringIO(data_string)
+        df = pd.read_csv(data_io)
+        return df
 
     def __str__(self):
         return self.name
