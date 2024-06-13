@@ -190,21 +190,27 @@ class CodeBox(BaseBox):
             )
         )
 
-    def upload(self, file_name: str, content: bytes) -> CodeBoxStatus:
+    def upload(
+        self, file_name: str, content: bytes, timeout: int = 600
+    ) -> CodeBoxStatus:
         return CodeBoxStatus(
             **self.codebox_request(
                 method="POST",
                 endpoint="/upload",
                 files={"file": (file_name, content)},
+                timeout=timeout,
             )
         )
 
-    async def aupload(self, file_name: str, content: bytes) -> CodeBoxStatus:
+    async def aupload(
+        self, file_name: str, content: bytes, timeout: int = 600
+    ) -> CodeBoxStatus:
         return CodeBoxStatus(
             **await self.acodebox_request(
                 method="POST",
                 endpoint="/upload",
                 files={"file": (file_name, content)},
+                timeout=timeout,
             )
         )
 

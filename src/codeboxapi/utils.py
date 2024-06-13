@@ -7,7 +7,7 @@ from time import sleep
 from typing import Optional
 
 import requests
-from aiohttp import ClientError, ClientResponse, ClientSession, FormData
+from aiohttp import ClientError, ClientResponse, ClientSession, ClientTimeout, FormData
 from aiohttp.payload import BytesIOPayload
 
 from codeboxapi.config import settings
@@ -138,6 +138,7 @@ def base_request(
     endpoint: str,
     body: Optional[dict] = None,
     files: Optional[dict] = None,
+    timeout: int = 420,
     retries: int = 3,
     backoff_factor: float = 0.3,
 ) -> dict:
@@ -158,7 +159,7 @@ def base_request(
     request_data = build_request_data(method, endpoint, body, files)
     for attempt in range(retries):
         try:
-            response = requests.request(**request_data, timeout=270)
+            response = requests.request(**request_data, timeout=timeout)
             return handle_response(response)
         except requests.RequestException as e:
             if attempt < retries - 1:
@@ -175,6 +176,7 @@ async def abase_request(
     endpoint: str,
     body: Optional[dict] = None,
     files: Optional[dict] = None,
+    timeout: int = 420,
     retries: int = 3,
     backoff_factor: float = 0.3,
 ) -> dict:
@@ -212,7 +214,9 @@ async def abase_request(
 
     for attempt in range(retries):
         try:
-            response = await session.request(**request_data)
+            response = await session.request(
+                **request_data, timeout=ClientTimeout(total=timeout)
+            )
             return await handle_response_async(response)
         except ClientError as e:
             if attempt < retries - 1:
